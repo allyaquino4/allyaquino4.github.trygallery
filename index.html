@@ -139,8 +139,7 @@
     <!-- Banner picture -->
     <div class="my-3">
       <div class="banner-wrapper">
-        <!-- Use lowercase assets/ folder, and encode filename -->
-        <img src="ASSETS/top%20pic.jpg" alt="Cat banner" loading="lazy"
+        <img src="assets/top-pic.jpg" alt="Cat banner" loading="lazy"
           onerror="this.onerror=null;this.src='https://placekitten.com/4032/3024'">
       </div>
     </div>
@@ -159,78 +158,107 @@
   <script src="cats.js"></script>
 
   <script>
-    function formatDate(d) {
-      const dt = new Date(d);
-      return !d || isNaN(dt) ? "Unknown" : dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-    }
+    // Configuration
+    const PLACEHOLDER_IMG = 'https://placekitten.com/400/240';
 
-    function getImgSrc(img) {
+    /**
+     * Normalizes image paths.
+     * Handles casing issues and ensures 'assets/' prefix exists only once.
+     */
+    const getImgSrc = (img) => {
       if (!img) return '';
-      img = String(img).trim();
-      if (/^(https?:)?\/\//i.test(img) || /^data:/i.test(img) || img.startsWith('/')) {
-        return img;
-      }
-      let cleaned = img.replace(/^[.\/]+/, '');
-      cleaned = cleaned.replace(/^assets\//i, 'assets/');
-      if (!/^assets\//i.test(cleaned)) {
-        cleaned = 'assets/' + cleaned;
-      }
-      return encodeURI(cleaned);
-    }
+      const path = String(img).trim();
 
-    // UPDATED FUNCTION: No longer needs async/await or fetch
-    function loadCats() {
+      // Return immediately if it's an external link, data URL, or absolute path
+      if (/^(https?:\/\/|data:|\/)/i.test(path)) return path;
+
+      // Clean up ./ or / prefixes and existing 'assets' text to start fresh
+      const cleanName = path.replace(/^[./]+/, '').replace(/^assets\//i, '');
+
+      return encodeURI(`assets/${cleanName}`);
+    };
+
+    /**
+     * Formats a YYYY-MM-DD string into a readable date.
+     */
+    const formatDate = (dateStr) => {
+      const date = new Date(dateStr);
+      if (!dateStr || isNaN(date)) return "Unknown";
+      return date.toLocaleDateString('en-US', { year: "numeric", month: "short", day: "numeric" });
+    };
+
+    /**
+     * Determines if a group's cards should be centered based on the group title.
+     */
+    const isCenteredGroup = (groupName) => {
+      const name = (groupName || '').toLowerCase();
+      const centerKeywords = ['my cats', 'my angels', 'far-away baby', 'far-way'];
+      return centerKeywords.some(keyword => name.includes(keyword));
+    };
+
+    /**
+     * Generates HTML for a single cat card.
+     */
+    const createCatCard = (cat) => {
+      const { name, description, birthdate, img } = cat;
+      const safeName = (name || '').replace(/"/g, '');
+      const imageSrc = getImgSrc(img) || PLACEHOLDER_IMG;
+
+      return `
+    <div class="col-6 col-md-4 col-lg-4 d-flex">
+      <div class="card pastel shadow my-3 w-100">
+        <img src="${imageSrc}" 
+             class="card-img-top" 
+             alt="${safeName}"
+             loading="lazy"
+             onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}'">
+        <div class="card-body">
+          <h5 class="card-title mb-1">${name || 'Unknown Cat'}</h5>
+          <p class="card-text small mb-1">${description || ''}</p>
+          <p class="card-text"><small class="text-muted">Born: ${formatDate(birthdate)}</small></p>
+        </div>
+      </div>
+    </div>
+  `;
+    };
+
+    /**
+     * Main function to render the gallery.
+     */
+    const renderGallery = () => {
       const statusEl = document.getElementById('status');
-      const content = document.getElementById('content');
+      const contentEl = document.getElementById('content');
 
-      // Check if catsData exists (loaded from cats.js)
+      // 1. Validation
       if (typeof catsData === 'undefined' || !Array.isArray(catsData) || !catsData.length) {
-        statusEl.textContent = 'No cats found in cats.js.';
-        content.innerHTML = '';
+        statusEl.textContent = 'No cats found in data source.';
         return;
       }
 
-      // Render the data directly
-      content.innerHTML = catsData.map(group => {
-        const name = (group.group || '').toLowerCase();
-        const shouldCenter =
-          name.includes('my cats') ||
-          name.includes('my angels') ||
-          (name.includes('far') && name.includes('baby')) ||
-          name.includes('far-way');
-        const rowClass = shouldCenter ? 'row centered' : 'row';
+      // 2. Clear Loading Status
+      statusEl.textContent = '';
 
-        const cards = (group.members || []).map(cat => `
-        <div class="col-6 col-md-4 col-lg-4 d-flex">
-          <div class="card pastel shadow my-3 w-100">
-            <img src="${getImgSrc(cat.img) || 'https://placekitten.com/400/240'}" class="card-img-top" alt="${(cat.name || '').replace(/"/g, '')}"
-                 loading="lazy"
-                 onerror="this.onerror=null;this.src='https://placekitten.com/400/240'">
-            <div class="card-body">
-              <h5 class="card-title mb-1">${cat.name || ''}</h5>
-              <p class="card-text small mb-1">${cat.description || ''}</p>
-              <p class="card-text"><small class="text-muted">Born: ${formatDate(cat.birthdate)}</small></p>
-            </div>
-          </div>
-        </div>
-      `).join('');
+      // 3. Build HTML
+      contentEl.innerHTML = catsData.map(group => {
+        const groupName = group.group || 'Untitled Group';
+        const rowClass = isCenteredGroup(groupName) ? 'row centered' : 'row';
+        const membersHtml = (group.members || []).map(createCatCard).join('');
 
         return `
-        <div class="col-12 my-4">
-          <h3 class="text-center fw-bold mb-3">${group.group || ''}</h3>
-          <div class="${rowClass}">
-            ${cards}
-          </div>
+      <div class="col-12 my-4">
+        <h3 class="text-center fw-bold mb-3">${groupName}</h3>
+        <div class="${rowClass}">
+          ${membersHtml}
         </div>
-      `;
+      </div>
+    `;
       }).join('');
+    };
 
-      statusEl.textContent = '';
-    }
-
-    document.addEventListener('DOMContentLoaded', loadCats);
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', renderGallery);
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
-</html> 
+</html>
